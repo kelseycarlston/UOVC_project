@@ -1,0 +1,274 @@
+---
+title: "UOVC Report"
+author: "University of Utah Economic Evaluation Unit"
+date: "January 13, 2021"
+output: html_document
+bibliography: biblio.bib  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#### You need to change this to the location of your "Report" folder
+setwd("C:/Users/Kelsey/Box/Utah VOC Project/Report")
+
+# This checks if you have the package installed, and installs it if you don't
+if (!require(sf)) install.packages('sf')
+# This attaches the package
+library(sf)
+
+if (!require(sp)) install.packages('sp')
+library(sp)
+
+# This sets the GIS coordinate system - it needs to be consistent across all the maps
+# The NAD83 Zone 12 projection is common and presents Utah well
+ut_crs <- "+proj=utm +zone=12 +datum=NAD83"
+
+# Read in county shape file
+ut_shape <- st_read("Data/Counties.shp")
+
+# This projects the shape file to the right coordinate system
+ut_shape <- st_transform(ut_shape, ut_crs)
+
+# This data shows the crime by county
+ut_data <- read.csv("Data/Crime_by_county.csv")
+
+# This merges the crime data with the shape file
+# I don't think we're currently using this. If you would like to, we can.
+ut_data <- merge(ut_shape, ut_data, by.x = "FIPS_STR", by.y = "GEOID")
+colnames(ut_data)[which(colnames(ut_data) == "ï..County"):which(colnames(ut_data)=="Domestic.Violence")] <- 
+  c("County_Name", "Population","Simple_Assault","Kidnapping","Sexual_Assault","Statutory_Rape",
+    "Rape_Ind","Agg_Assault_Ind","Child_Abuse","Dom_Viol")
+
+# This loads in the data about the organizations funded by UOVC
+# The data contains information about people served and funding received by each org
+agency_data <- read.csv("Data/Organizations.csv")
+# This changes the longitude and latitude into spatial points, then applies the CRS
+agency_sf <- st_as_sf(agency_data, coords = c("Longitude", "Latitude"), crs = 4326)
+agency_sf <- st_transform(agency_sf, crs=26912)
+
+# Adding a few variables
+# Rate of sexual assault
+ut_data$SA_Rate <- 1000*ut_data$Sexual_Assault/ut_data$Population
+# Amount of funding received in 2019
+agency_sf$awards_2019 <- agency_sf$SASP2019 + agency_sf$VAWA2019 + agency_sf$VOCA2019
+# Percent of individuals who were sexual assault victims
+agency_sf$pct_SA <- 100*agency_sf$AdultSexAssault/agency_sf$TotalIndviduals
+# Percent of individuals who were domestic violence victims
+agency_sf$pct_DV <- 100*agency_sf$DomesticViolence/agency_sf$TotalIndviduals
+# Award in 2019 divided by number of individuals served
+agency_sf$award_per_served <- agency_sf$Total2019/agency_sf$TotalIndviduals
+# Get the centroid of each county - I don't remember why I did this
+ut_data <- cbind(ut_data, st_coordinates(st_centroid(ut_data)))
+```
+
+## Part 1: Economic Costs of Interpersonal Violence and Sexual Assault
+### The Price Society Pays in the U.S.
+The cost of interpersonal violence (IPV) (see full definition in Appendix) to society is one that is so large that it is considered a major public health concern or more appropriately as a shadow pandemic. IPV is a pandemic given the prevalence and severity of such victimization across the country and a shadow pandemic given the hidden nature of such victimization from the public eye (which has been further exacerbated by the latest COVID-19 pandemic). IPV is frequently masked under other forms of violence, adverse mental health outcomes, suicide, poor health outcomes, economic losses, job losses, houselessness, intergenerational consequences, poverty and fractured communities. For all these reasons, IPV is a major public health concern not only due to the direct impact it has on the physical and mental health of survivors, but also its multiplying impacts into society including economic development, public resources, and the criminal justice system.
+
+![costs and benefits of interpersonal violence](Figures\Figure1_Costs_of_Interpersonal_Violence.png)
+
+#### Prevention
+* Bullet point
+* Bullet point
+
+#### Cost savings
+* Bullet point with a <https://link.com>
+  * Sub Bullet?
+* And another
+
+### The Price Utah Pays and Cost-Saving Solutions
+* Bullet
+  * Bullet with **Emphasis**
+  
+## Part 2: Landscape of Victims Services in Utah and Nationwide
+### Utah Landscape of Victims Services
+Crime victimization costs society an enormous amount. Each year, costs of victimization are estimated to cost the US hundreds of billions of dollars (@costs_of_victimization). Utah is no exception to this: in 2018, there were almost 30,000 “crimes against persons” (@ut_crime_2018). Each of these people experience direct costs, like medical bills and costs of prosecution, and also indirect costs, like lost work time and the burden of mental and emotional distress. 
+
+The Utah Office for Victims of Crime (UOVC) is tasked with providing funding to agencies that provide relief to crime victims. The agency provides money to a number of different kinds of agencies, including law enforcement, prosecutors, courts, organizations that serve victims of domestic and family violence and sexual assault services, coalitions of these organizations, and campus-based services.  
+
+This chapter is meant to explore the kinds of agencies funded by UOVC, including their purpose, location, and funding; provide a funding history of these agencies; and illustrate the demographics of Utah that may be underserved.
+
+#### What kinds of agencies are there?
+##### Police Departments
+VOCA funds can be used to pay for victim advocates or victim services that go beyond what law enforcement typically provides. The people funded by this money can provide special help to victims in understanding their case and filing claims, provide crisis counseling, give information about other resources, and advocate for victims. In Utah, the most common services provided by police departments are information and referral services, justice system assistance, and individual advocacy. The average cost per individual served in 2019 was $137, and law enforcement offices accounted for 13% of UOVC funding in 2019. The following map shows which police departments are receiving funding from UOVC.
+
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+if (!require(tmap)) install.packages('tmap')
+library(tmap)
+tmap_mode("view")
+tm_shape(ut_data) +
+  tm_polygons("Population", 
+              style = "log10_pretty", 
+              id = "County_Name",
+              popup.vars = c("Population" = "Population"),
+              title = "Population") +
+  # This is the only thing changing in the next few maps - type of organization
+  tm_shape(agency_sf[agency_sf$OrgDescription == "Police Department",]) + 
+  tm_symbols(size = 0.1,
+             col = "midnightblue",
+             # The variables in the popups
+             popup.vars = c("Total Individuals Served in 2019" = "TotalIndviduals",
+                            "Total Awards in 2019"= "awards_2019",
+                            "% Sexual Assault" = "pct_SA",
+                            "% Domestic Violence" = "pct_DV",
+                            "Funding Dollars Per Victim Served" = "award_per_served"
+             )             )
+```
+
+Training for law enforcement regarding domestic violence and sexual assault is anecdotally successful. Many agencies we talked to said that new police officers often don’t understand the special needs of victims of domestic violence and sexual assault, feel uncomfortable talking about it, and are subject to victim-blaming, but that training sessions seem to help. 
+
+One of the largest issues with police departments are their dual roles - to help victims and to prosecute criminals. It is very important to prosecute criminals in order to add consequences to offenders and to keep offenders from repeating their crimes. Several of our interviewees reported that offenders were likely to offend again, and that some victims had to live in fear if the person who attacked them was still “on the loose” and had not faced negative repercussions. However, sometimes the two roles of police departments conflict with each other.
+
+Several of the people we interviewed brought up concerns that victim advocates within the criminal justice system are often on the side of the prosecutor or police, not on the side of the advocate. There are several reasons why a victim may choose not to legally pursue their perpetrator, whether that’s out of concern for the perpetrator, lack of hope for a successful prosecution, privacy, or a desire to move past the trauma, and an advocate within the law enforcement system has reasons not to be sympathetic to that victim’s needs. 
+
+Many people reported positive experiences in working with system-based advocates and law enforcement. To many people, they are a necessary part of victims services, separate from other services. However, other people reported that they found law enforcement to be antagonistic to victims, and some even reported law enforcement trying to undermine other victim advocates because they felt they were competing for the victim’s attention. One of the agencies we talked to discussed how the law enforcement they worked with were unwilling to arrest perpetrators who violated protective orders. Another state reported that their law enforcement had sued victims who chose not to comply with law enforcement over bringing false charges.
+
+Clearly, law enforcement is an important part of a victim’s protection, and prosecution can be helpful for crime and for healing. However, law enforcement agencies need to understand how their role affects victims and how they can be victim-centered. Any acts of law enforcement that are damaging to victims should not be tolerated, and any agency, particularly those receiving UOVC funding, should not refuse to protect victims from harm by letting those who violate protective orders walk free.
+
+We recommend that the attitude and acts of law enforcement are observed. If a law enforcement agency is not acting in the best interest of victims, their funding should not be removed, lest they provide even fewer victim services, but that their discretion be limited and that training is enforced. For several areas in Utah where law enforcement is not receiving funding, we recommend working with them to get funding for some training.
+
+##### Attorney's Offices
+Attorney’s offices provide system-based advocates to victims of crime. A large portion of the victimizations attorneys offices serve are domestic violence (43%), followed by assaults (10%) and identity theft (8%). The primary services provided by prosecutors are information and referral and criminal/civil justice system assistance. The average cost per individual served in 2019 was $146, and prosecutor’s offices accounted for 23% of UOVC funding in 2019.
+
+The following map shows the locations of all of the various prosecutors offices which have been given money from UOVC.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+
+tm_shape(ut_data) +
+  tm_polygons("Population", 
+              style = "log10_pretty", 
+              id = "County_Name",
+              popup.vars = c("Population" = "Population"),
+              title = "Population") +
+  tm_shape(agency_sf[agency_sf$OrgDescription == "Attorney's Office",]) + 
+  tm_symbols(size = 0.1,
+             col = "midnightblue",
+             popup.vars = c("Total Individuals Served in 2019" = "TotalIndviduals",
+                            "Total Awards in 2019"= "awards_2019",
+                            "Percent Sexual Assault" = "pct_SA",
+                            "Percent Domestic Violence" = "pct_DV",
+                            "Funding Dollars Per Victim Served" = "award_per_served"
+             ))
+```
+
+It is important that prosecutors, law enforcement, and the victim work together in order to press charges, and a system-based advocate can facilitate this interaction. Prosecution needs to be done in a victim-centered way, but it needs to be done. If perpetrators are not held accountable, they are likely to reoffend, with the same victim or a different one. 
+
+If prosecution occurs, it can be very difficult to work with victims and even to keep track of them. Victims are in a tumultuous period where they are likely to be very busy and potentially will move to stay with relatives or get out of their situation. Victims are more likely to be helpful in prosecution if they are kept in continual contact and do not have difficulty talking to people working on their case.
+
+##### Children's Justice Centers
+Children’s Justice Centers (CJCs) provide a friendly environment for children to talk to professionals after abuse. They can be supported through physical exams with the help of caring staff and provided with trauma-centered counseling. The CJCs also have staff that can coordinate the efforts of law enforcement, prosecutors, and advocates. 
+
+CJCs serve mainly child sexual abuse victims (43%), child abuse victims (11%) and domestic violence victims (7%). Most of the remaining cases are in the “Other” category, which includes things like lewdness, exploitation, endangerment, neglect, and secondary victimizations. CJCs mainly report providing information and referral services, advocacy, and emotional and support services. The average cost per individual served is $209. CJCs accounted for 10% of UOVC funding in 2019.
+
+Below is a map of CJCs that receive funding from UOVC throughout Utah.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+
+tm_shape(ut_data) +
+  tm_polygons("Population", 
+              style = "log10_pretty", 
+              id = "County_Name",
+              popup.vars = c("Population" = "Population"),
+              title = "Population") +
+  tm_shape(agency_sf[agency_sf$OrgDescription == "CJC",]) + 
+  tm_symbols(size = 0.1,
+             col = "midnightblue",
+             popup.vars = c("Total Individuals Served in 2019" = "TotalIndviduals",
+                            "Total Awards in 2019"= "awards_2019",
+                            "Percent Sexual Assault" = "pct_SA",
+                            "Percent Domestic Violence" = "pct_DV",
+                            "Funding Dollars Per Victim Served" = "award_per_served"
+             ))
+```
+
+##### Domestic Violence and Sexual Assault Agencies
+Domestic violence and sexual assault (DV/SA) agencies provide an array of services to victims, but most commonly provide emotional support and safety services, and housing services, in the form of both emergency shelter and relocation assistance. The most common victimizations are domestic violence (58%) and adult sexual assault (20%). Other victimizations are assault (5%), adults abused as children (4%), and stalking (3%).  
+
+Below is a map of the location of DV/SA agencies that receive funding from UOVC throughout the state.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+
+tm_shape(ut_data) +
+  tm_polygons("Population", 
+              style = "log10_pretty", 
+              id = "County_Name",
+              popup.vars = c("Population" = "Population"),
+              title = "Population") +
+  tm_shape(agency_sf[agency_sf$OrgDescription == "DV/SA",]) + 
+  tm_symbols(size = 0.1,
+             col = "midnightblue",
+             popup.vars = c("Total Individuals Served in 2019" = "TotalIndviduals",
+                            "Total Awards in 2019"= "awards_2019",
+                            "Percent Sexual Assault" = "pct_SA",
+                            "Percent Domestic Violence" = "pct_DV",
+                            "Funding Dollars Per Victim Served" = "award_per_served"
+             ))
+```
+
+Most of these agencies serve sexual assault and domestic abuse. There is one standalone sexual assault center, the Rape Recovery Center. While dual-service agencies have well-trained professionals that can handle many types of victimizations, it is important to consider how victims will interact with the agencies. Marketing material for many of these agencies is very domestic violence and family focused. If the shelter is at the primary location of the agency, sexual assault victims may feel uncomfortable visiting; they may see the focus of the agency as being something different. Most agencies responded to questions about sexual assault victims’ ability to access the agencies by saying that law enforcement knows to refer victims to the agency. However, considering a very small portion of sexual assaults are actually reported, this may not be good enough. Outreach to local high schools and colleges may be an effective way of increasing awareness for dual-service agencies.
+
+Several agencies serve massive geographical areas. New Horizons Crisis Center serves 5 counties which cover an area larger than the area of Massachusetts. These areas are very sparsely populated and difficult to serve. It can be hard for victims to access services due to long driving distances and lack of transportation. Most agencies have ways of reaching these clients, like mobile advocacy or using hotels as emergency shelter. During the pandemic, people have gotten more comfortable with online interactions, which many agencies say has been helpful. In addition to not having to worry about transportation, victims don’t have to consider child care or driving time to reach advocacy. While online meetings are not always a great answer, particularly when working with children, agencies that have not considered this option should do so.
+
+Emergency shelters are an important part of domestic violence services. The first priority of any DV agency should be to ensure the safety of their clients. However, shelters are expensive, and many of the state VOCA administrators we interviewed suggested that there are often good alternatives to shelters that are more cost effective. In Utah, agencies that have shelter spend an average of 21% of their UOVC funds on their shelters, with some agencies spending as much as 40% of their awards on shelter. 
+
+Shelters house people who are in crisis. Being an environment with many people in crisis can further traumas experienced by victims and their families. In addition, while they may provide temporary safety, once the 30 days at the shelter are up, victims may not have a choice but to go back to their abusers. One agency in another state suggested that they only put someone in shelter if they are in immediate danger. Otherwise, they arrange a place to stay with the victim’s family, or look into transitional housing or relocation assistance. Some agencies suggested that hotels or AirBnBs might be a more cost-effective alternative to shelter. While no client should be allowed to stay in a dangerous situation, shelter should be considered a last resort. 
+
+Relocation assistance is important for most DV victims. Many victims will not be able to afford housing initially, and if they are left unassisted, they will be likely to go back to their abuser. Some agencies talked about meeting victims where they’re at with housing assistance; some will need rent for a month, while others may benefit more from receiving $200 towards their rent for 5 months. One agency in another state provided a cheap RV to a victim because that best served their needs. 
+
+Financial classes and parenting classes are often offered to victims as a way of making them more self-sufficient. This can be particularly important to keep victims from feeling overwhelmed. If they know how to budget, they will be more likely to stay away from their previous situations. However, for many victims, the month at the shelter is a hectic time where they do not feel inclined to add another thing to their plate, like financial classes. Agencies should consider creating incentives to attend classes, as this can help a victim stay away from revictimization. 
+
+Agencies suggest that one of the biggest needs of victims is mental health services, but that those services would also be the first ones to go in the face of budget cuts. While most mental health services are considered to be one-on-one staff counseling, agencies could consider further utilizing support groups, peer support, and potentially technology-based health services.
+
+##### Polygamist Services
+There are two agencies in Utah that provide services to people coming out of plural marriage communities, Cherish Families and Holding Out Help. While we cannot say how many people in Utah are a part of plural families, we can say that it exists and the victims from these communities have very special needs. The most common victimizations are domestic violence (19%), bullying (14%), hate crimes (13%), child abuse (10%), and child sexual abuse (5%). These agencies provide many kinds of services, but mostly personal advocacy and accompaniment. These agencies received 4% of 2019 UOVC awards. Cherish Families received a much larger award. The average cost per individual served in these agencies in 2019 was $724. This cost is high compared to other types of organizations because they provide transitional housing and relocation assistance to many of their victims.
+
+Holding Out Help finds host families to house families transitioning out of plural family communities. This may help victims feel safe in their transition, as they can see families functioning normally outside of their community. However, there are reports that Holding Out Help does not provide victim-centered services. They have requirements to attend Bible studies and continue to follow the LDS faith. Also, victims are often used in media outreach soon after their transition. Victim-centered services should not have these requirements, as a television appearance may retraumatize a victim, or victims may be trying to evaluate their beliefs and could tie abusive, patriarchal values to religion. These allegations require further investigation.
+
+##### Coalitions
+Utah has two coalitions: Utah Coalition Against Sexual Assault (UCASA) and Utah Domestic Violence Coalition. These coalitions receive funding to provide technical assistance and training to victim-serving agencies and also facilitate a relationship between agencies.
+
+##### Other
+Other agencies include:
+- Asian Association of Utah
+- Catholic Community Services of Utah
+- Child and Family Support Center/The Family Place
+- The Family Support Center
+- Family Support Center of Ogden
+- Family Support Center of Southwestern Utah
+- Holy Cross Ministries
+- IHC Health Services Inc.
+- Pacific Island Knowledge 2 Action Resources
+- Sego Lily Center for the Abused Deaf
+- The Navajo Nation Tribal Government
+- Urban Indian Center of Salt Lake
+- Utah Department of Health
+- Utah Navajo Health Systems
+- Utah Office of Guardian ad Litem and CASA
+
+#### Funding History
+VOCA funding requirements are that domestic violence, sexual assault, and child abuse should get 10 percent of funds each. In addition, 10 percent of funds should go to underserved communities. In 2019, these requirements were met. 
+
+Agencies also receive funding from local cities and counties, other funders like the Utah Department of Human Services. Some agencies use fundraising to fill out their budgets, but this does not usually comprise a large part of their budget.
+
+The following chart shows the VOCA funding history by category from 2012 to 2020. Funding has increased for all categories over this time period. Some categories, like housing and outreach/awareness, had not received any funding until the last few years. Other categories increased by tremendous amounts -- overall, funding increased by 671 percent, from \$3.6 million to \$27.9 million. 
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+funding_history <- read.csv("Data/VOCA Funding History.csv")
+colnames(funding_history)[1] <- "Category"
+library(ggplot2)
+library(plotly)
+p <- ggplot(funding_history, aes(x= Year, y=Amount, color = Category)) +
+  geom_line()+
+  scale_color_hue(name="Category",l=55) +
+  geom_point()
+
+
+ggplotly(p)
+
+```
+
+Given imminent funding cuts, agencies suggested they would cut down on services like mental health services, or have fewer interactions with clients. For system-based advocates, this likely means fewer convictions and less support for victims in the legal arena. Some agencies suggested they would try to fundraise more, or that they would reduce the number of full-time employees and increase the use of interns. Unfortunately, decreased personnel can lead to increased workloads, stress, and burnout. Finding ways to reduce turnover, including self-care practice and work-life balance, could decrease costs.
+
+## References
